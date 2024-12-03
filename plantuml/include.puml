@@ -1,0 +1,11 @@
+@startuml
+!include ./Request.puml
+!include ./Response.puml
+!include ./Worker.puml
+!include ./Server.puml
+!include ./Router.puml
+!include ./Program.puml
+!include ./obj/Debug/net8.0/.NETCoreApp,Version=v8.0.AssemblyAttributes.puml
+!include ./obj/Debug/net8.0/multithreading.AssemblyInfo.puml
+!include ./obj/Debug/net8.0/multithreading.GlobalUsings.g.puml
+@enduml

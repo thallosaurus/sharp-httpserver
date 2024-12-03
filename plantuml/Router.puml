@@ -1,0 +1,8 @@
+@startuml
+class Router {
+    + Router()
+    + {static} AddRoute(path:string, method:Method, fn:ResponseHandler) : void
+    + {static} AddMiddleware(mw:MiddlewareHandler) : void
+    + {static} Exec(req:Request) : Response?
+}
+@enduml

@@ -1,0 +1,16 @@
+@startuml
+class Request {
+    + data : string?
+    + Request(m:HttpMeta, h:Dictionary<string, string>)
+}
+struct HttpMeta {
+    + path : string
+    + version : string
+}
+enum Method {
+    GET,
+    POST,
+}
+Request --> "meta" HttpMeta
+HttpMeta --> "method" Method
+@enduml

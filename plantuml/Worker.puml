@@ -1,0 +1,13 @@
+@startuml
+class Worker {
+    + ThreadId : int <<get>>
+    + available : bool = false
+    + Worker(id:int, cancellationTokenSource:CancellationTokenSource)
+    + <<async>> SendRequest(request:string, handler:Socket) : void
+}
+struct WorkerMessage {
+    + WorkerMessage(_data:string, _socket:Socket)
+    + data : string
+}
+WorkerMessage --> "socket" Socket
+@enduml
