@@ -1,7 +1,0 @@
-@startuml
-class Server {
-    + Server(iep:IPEndPoint)
-    + <<async>> Start() : Task
-    + Stop() : void
-}
-@enduml

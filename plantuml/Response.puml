@@ -1,9 +1,0 @@
-@startuml
-class Response {
-    + status : int
-    + body : string?
-    + Response(s:int, b:string)
-    + GetBytes() : byte[]
-    + ServeFile(path:string) : void
-}
-@enduml
