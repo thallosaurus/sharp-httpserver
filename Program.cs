@@ -1,5 +1,5 @@
 using System.Net;
-using HttpServer;
+using SharpHttpServer;
 
 Router.AddMiddleware((req, res) => {
     Console.WriteLine($"{req.meta.method} {req.meta.path}");

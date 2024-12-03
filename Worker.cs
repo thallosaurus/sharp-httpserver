@@ -1,7 +1,7 @@
 using System.Net.Sockets;
 using System.Threading.Channels;
 
-namespace HttpServer;
+namespace SharpHttpServer;
 
 class Worker
 {

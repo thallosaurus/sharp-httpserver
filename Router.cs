@@ -1,4 +1,4 @@
-namespace HttpServer;
+namespace SharpHttpServer;
 
 delegate Response ResponseHandler(Request req, Response res);
 delegate Response MiddlewareHandler(Request req, Response res);

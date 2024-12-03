@@ -1,4 +1,4 @@
-namespace HttpServer;
+namespace SharpHttpServer;
 
 class Request
 {

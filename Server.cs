@@ -2,7 +2,7 @@
 using System.Net.Sockets;
 using System.Text;
 
-namespace HttpServer;
+namespace SharpHttpServer;
 
 class Server
 {
@@ -40,6 +40,7 @@ class Server
             do
             {
                 var handler = await listener.AcceptAsync(cancellationTokenSource.Token);
+
                 var buffer = new byte[1024];
                 var received = await handler.ReceiveAsync(buffer, SocketFlags.None);
                 var request = Encoding.UTF8.GetString(buffer, 0, received);

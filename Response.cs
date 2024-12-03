@@ -1,6 +1,6 @@
 using System.Text;
 
-namespace HttpServer;
+namespace SharpHttpServer;
 
 class Response {
     public int status;
