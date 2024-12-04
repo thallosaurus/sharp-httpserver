@@ -5,7 +5,7 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "C#: multithreading Debug",
+            "name": "C#: sharp-httpserver Debug",
             "type": "dotnet",
             "request": "launch",
             "projectPath": "${workspaceFolder}/sharp-httpserver.csproj"

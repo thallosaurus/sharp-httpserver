@@ -62,11 +62,19 @@ class Server
     /// <param name="handler"></param>
     private void HandleRequest(Socket handler)
     {
-        // Get the first available Worker
-        var worker = GetAvailableWorkers().First();
+        Task.Run(async () =>
+        {
+            var worker = GetAvailableWorkers();
+            while (worker.Count() == 0)
+            {
+                await Task.Delay(25);
+                worker = GetAvailableWorkers();
+            }
+            worker.First().SendRequest(handler);
+        });
 
+        // Get the first available Worker
         // Send the Request over to the worker
-        Task.Run(() => worker.SendRequest(handler));
     }
 
     /// <summary>

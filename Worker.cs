@@ -1,6 +1,8 @@
 using System.Net.Sockets;
 using System.Text;
 using System.Threading.Channels;
+using HttpMachine;
+using IHttpMachine.Model;
 
 namespace SharpHttpServer;
 
@@ -52,25 +54,45 @@ class Worker
         UnlockWorker();
         while (!tokenSource.IsCancellationRequested)
         {
-            WorkerMessage msg;
-            var buffer = new byte[1024];
-            string data;
             // wait until the request channel gets a new request
             await requestChannel.Reader.WaitToReadAsync(tokenSource.Token);
-            msg = await requestChannel.Reader.ReadAsync(tokenSource.Token);
-            var received = await msg.socket.ReceiveAsync(buffer, SocketFlags.None);
-            data = Encoding.UTF8.GetString(buffer, 0, received);
+            LockWorker();
 
-            var req = Parse(data.Split("\r\n"));
+            WorkerMessage msg;
+            var buffer = new byte[1024];
+            msg = await requestChannel.Reader.ReadAsync(tokenSource.Token);
+            _ = await msg.socket.ReceiveAsync(buffer, SocketFlags.None);
+
+            HttpRequestResponse req;
+            using (var handler = new HttpParserDelegate())
+            using (var parser = new HttpCombinedParser(handler))
+            {
+                var length = parser.Execute(buffer);
+                //Console.WriteLine($"Parsed Request Length: {l}");
+                req = handler.HttpRequestResponse;
+            }            
 
             try
             {
-                var resp = Router.Exec(req);
+                Response resp;
+                if (req == null)
+                {
+                    resp = Response.CreateBadRequest();
+                }
+                else
+                {
+
+                    resp = Router.Exec(req);
+                }
                 _ = await msg.socket.SendAsync(resp.GetBytes(), 0, tokenSource.Token);
+            }
+            catch (Exception e) {
+                Console.WriteLine(e);
             }
             finally
             {
                 msg.socket.Close();
+                UnlockWorker();
             }
 
         }
@@ -95,66 +117,6 @@ class Worker
         {
             return;
         }
-    }
-
-    /// <summary>
-    /// Converts a Request to object
-    /// </summary>
-    /// <param name="req"></param>
-    /// <returns>Request</returns>
-    private Request Parse(IEnumerable<string> req)
-    {
-        var list = req.ToList();
-        var r = parseFirstField(list.First());
-
-        var headers = new Dictionary<string, string>();
-
-        foreach (var item in list.Skip(1))
-        {
-            if (item.Length != 0)
-            {
-                var sepIndex = item.IndexOf(":");
-
-                string key = item.Substring(0, sepIndex);
-                string value = item.Substring(sepIndex + 1);
-
-                headers.Add(key, value.Trim());
-            }
-            else
-            {
-                break;
-            }
-        }
-
-        /*if (r.method == Method.POST) {
-            var postData = list.Last();
-        }*/
-
-        return new Request(r, headers);
-
-    }
-
-    private HttpMeta parseFirstField(string field)
-    {
-        var fields = field.Split(" ");
-
-        var m = new HttpMeta();
-
-        Method method;
-        Enum.TryParse(fields[0], out method);
-
-        try
-        {
-            m.method = method;
-            m.path = fields[1];
-            m.version = fields[2];
-        }
-        catch (IndexOutOfRangeException e)
-        {
-            Logger.Error(e.ToString());
-        }
-
-        return m;
     }
 }
 

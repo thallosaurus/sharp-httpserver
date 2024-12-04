@@ -1,15 +1,15 @@
+using IHttpMachine.Model;
+
 namespace SharpHttpServer;
 
 class Request
 {
-    public string? data;
-    public HttpMeta meta;
-    private Dictionary<string, string> headers;
 
-    public Request(HttpMeta m, Dictionary<string, string> h)
+    public HttpRequestResponse request;
+
+    public Request(HttpRequestResponse r)
     {
-        meta = m;
-        headers = h;
+        request = r;
     }
 }
 

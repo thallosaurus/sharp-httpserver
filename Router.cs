@@ -1,25 +1,27 @@
+using IHttpMachine.Model;
+
 namespace SharpHttpServer;
 
-delegate Response ResponseHandler(Request req, Response res);
-delegate Response RequestTransformer(Request req, Response res);
+delegate Response ResponseHandler(HttpRequestResponse req, Response res);
+delegate T RequestTransformer<T>(T req) where T : HttpRequestResponse;
 
 class Router
 {
-    private Dictionary<(Method, string), ResponseHandler> routes = new();
-    private List<RequestTransformer> middlewares = new();
+    private Dictionary<(string, string), ResponseHandler> routes = new();
+    private List<RequestTransformer<HttpRequestResponse>> middlewares = new();
     static Router router = new();
     public Router() { }
-    public static void AddRoute(string path, Method method, ResponseHandler fn)
+    public static void AddRoute(string path, string method, ResponseHandler fn)
     {
         router.routes.Add((method, path), fn);
     }
 
-    public static void AddMiddleware(RequestTransformer mw)
+    public static void AddMiddleware(RequestTransformer<HttpRequestResponse> mw)
     {
         router.middlewares.Add(mw);
     }
 
-    public static Response Exec(Request req)
+    public static Response Exec(HttpRequestResponse req)
     {
         try
         {
@@ -27,10 +29,11 @@ class Router
 
             foreach (var mw in router.middlewares)
             {
-                res = mw.Invoke(req, res);
+                req = mw.Invoke(req);
             }
 
-            var r = (from s in router.routes where s.Key == (req.meta.method, req.meta.path) select s).ToList();
+            var r = (from s in router.routes where s.Key == (req.Method, req.Path) select s).ToList();
+
             if (r.Count > 0)
             {
                 var route = r.First().Value;
@@ -38,14 +41,19 @@ class Router
             }
             else
             {
-                return Response.CreateNotFound();
+                //return Response.CreateNotFound();
+                throw new KeyNotFoundException();
             }
-
-            //var route = router.routes[(req.meta.method, req.meta.path)];
         }
-        catch (KeyNotFoundException)
+        catch (KeyNotFoundException knf)
         {
+            Console.WriteLine(knf);
             return Response.CreateNotFound();
+        }
+        catch (NullReferenceException nre)
+        {
+            Console.WriteLine(nre);
+            return Response.CreateBadRequest();
         }
         catch (Exception e)
         {

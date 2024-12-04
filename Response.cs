@@ -15,12 +15,16 @@ class Response {
         return new(200, "");
     }
 
+    public static Response CreateBadRequest() {
+        return new(400, "Bad Request");
+    }
+
     public static Response CreateNotFound() {
         return new(404, "Not found");
     }
 
     public byte[] GetBytes() {
-        var resp = $"HTTP/1.1 {GetStatusAsString(status)} OK\r\n\r\n{body}\r\n\r\n";
+        var resp = $"HTTP/1.1 {GetStatusAsString(status)}\r\n\r\n{body}\r\n\r\n";
         return Encoding.UTF8.GetBytes(resp);
     }
 
