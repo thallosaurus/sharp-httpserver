@@ -4,6 +4,10 @@ using System.Text;
 
 namespace SharpHttpServer;
 
+/// <summary>
+/// Represents the Server as a whole.
+/// Takes requests and sends them to an available worker thread
+/// </summary>
 class Server
 {
     static int WorkerCount = 10;
@@ -22,7 +26,7 @@ class Server
         for (int i = 0; i < WorkerCount; i++)
         {
             // Thread 0 is reserved for Server Thread
-            workers.Add(new Worker(i + 1, cancellationTokenSource.Token));
+            workers.Add(new Worker(i + 1));
         }
 
         ipEndPoint = iep;
@@ -32,44 +36,51 @@ class Server
     {
         using Socket listener = new(ipEndPoint.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
 
-        try
-        {
-            listener.Bind(ipEndPoint);
-            listener.Listen(ipEndPoint.Port);
+        listener.Bind(ipEndPoint);
+        listener.Listen(ipEndPoint.Port);
 
-            do
+        do
+        {
+            Socket handler;
+            try
             {
-                var handler = await listener.AcceptAsync(cancellationTokenSource.Token);
+                handler = await listener.AcceptAsync(cancellationTokenSource.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
 
-                var buffer = new byte[1024];
-                var received = await handler.ReceiveAsync(buffer, SocketFlags.None);
-                var request = Encoding.UTF8.GetString(buffer, 0, received);
-                HandleRequest(request, handler);
-            } while (!cancellationTokenSource.IsCancellationRequested);
-        }
-        catch (Exception e)
-        {
-            Console.WriteLine(e);
-        }
-        finally {
-            Stop();
-        }
+            HandleRequest(handler);
+
+        } while (!cancellationTokenSource.IsCancellationRequested);
     }
 
-    private void HandleRequest(string request, Socket handler)
+    /// <summary>
+    /// Sends a request to a Worker
+    /// </summary>
+    /// <param name="handler"></param>
+    private void HandleRequest(Socket handler)
     {
         // Get the first available Worker
         var worker = GetAvailableWorkers().First();
 
         // Send the Request over to the worker
-        Task.Run(() => worker.SendRequest(request, handler));
+        Task.Run(() => worker.SendRequest(handler));
     }
 
+    /// <summary>
+    /// Stops the Server and all of its worker threads
+    /// </summary>
     public void Stop()
     {
         cancellationTokenSource.Cancel();
     }
 
+    /// <summary>
+    /// Queries the Worker Dict if there are worker available
+    /// </summary>
+    /// <returns></returns>
     private IEnumerable<Worker> GetAvailableWorkers()
     {
         return from worker in workers

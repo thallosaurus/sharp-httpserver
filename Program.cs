@@ -20,4 +20,7 @@ Router.AddRoute("/sleep", Method.GET, (req, res) => {
 });
 
 var server = new Server(IPEndPoint.Parse("127.0.0.1:8080"));
-await server.Start();
+//await Task.Run(server.Start);
+Thread.Sleep(10000);
+
+server.Stop();

@@ -1,8 +1,14 @@
 using System.Net.Sockets;
+using System.Text;
 using System.Threading.Channels;
 
 namespace SharpHttpServer;
 
+/// <summary>
+/// The Worker Class performs the Work to be done on Requests.
+/// 
+/// Runs as a daemon in the background
+/// </summary>
 class Worker
 {
     public int ThreadId { get; }
@@ -10,76 +16,100 @@ class Worker
     private Channel<WorkerMessage> requestChannel;
     public bool available = false;
     private CancellationTokenSource tokenSource;
-    public Worker(int id, CancellationToken cancellationTokenSource)
+
+    /// <summary>
+    /// Constructs a new Worker Thread and starts it
+    /// </summary>
+    /// <param name="id"></param>
+    /// <param name="cancellationTokenSource"></param>
+    public Worker(int id)
     {
         ThreadId = id;
-        tokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationTokenSource);
+        tokenSource = new CancellationTokenSource();
 
         requestChannel = Channel.CreateUnbounded<WorkerMessage>();
 
-        workerThread = new Thread(() => RunWorker());
+        workerThread = new Thread(RunWorker);
         workerThread.Start();
-
-
-        Console.WriteLine($"Spawned Worker Thread {id}");
     }
 
-    void LockWorker() {
+    void LockWorker()
+    {
         available = false;
     }
 
-    void UnlockWorker() {
+    void UnlockWorker()
+    {
         available = true;
     }
 
+    /// <summary>
+    /// Workers Main Function
+    /// </summary>
     async void RunWorker()
     {
+        Console.WriteLine($"Spawned Worker Thread {ThreadId}");
         UnlockWorker();
-        do
+        while (!tokenSource.IsCancellationRequested)
         {
+            WorkerMessage msg;
+            var buffer = new byte[1024];
+            string data;
             // wait until the request channel gets a new request
-            if (await requestChannel.Reader.WaitToReadAsync(tokenSource.Token))
+            await requestChannel.Reader.WaitToReadAsync(tokenSource.Token);
+            msg = await requestChannel.Reader.ReadAsync(tokenSource.Token);
+            var received = await msg.socket.ReceiveAsync(buffer, SocketFlags.None);
+            data = Encoding.UTF8.GetString(buffer, 0, received);
+
+            var req = Parse(data.Split("\r\n"));
+
+            try
             {
-                LockWorker();
-                // read all request in
-                var msg = await requestChannel.Reader.ReadAsync(tokenSource.Token);
-
-                var req = Parse(msg.data.Split("\r\n"));
-                //Console.WriteLine($"Thread {ThreadId} got message:\n{msg.data}, {req}");
-
                 var resp = Router.Exec(req);
-
-                var sentBytes = await msg.socket.SendAsync(resp.GetBytes(), 0);
-                //Console.WriteLine($"Send {sentBytes} bytes");
+                _ = await msg.socket.SendAsync(resp.GetBytes(), 0, tokenSource.Token);
+            }
+            finally
+            {
                 msg.socket.Close();
-
-                UnlockWorker();
-            } else {
-                break;
             }
 
-        } while (!tokenSource.IsCancellationRequested);
+        }
         Console.WriteLine($"Closing Worker {ThreadId}");
     }
 
-    public async void SendRequest(string request, Socket handler)
+    /// <summary>
+    /// Sends the handler to the worker
+    /// </summary>
+    /// <param name="handler"></param>
+    public async void SendRequest(Socket handler)
     {
         // send request to worker
-        if (await requestChannel.Writer.WaitToWriteAsync(tokenSource.Token))
+        try
         {
-            await requestChannel.Writer.WriteAsync(new WorkerMessage(request, handler), tokenSource.Token);
+            if (await requestChannel.Writer.WaitToWriteAsync(tokenSource.Token))
+            {
+                await requestChannel.Writer.WriteAsync(new WorkerMessage(handler), tokenSource.Token);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            return;
         }
     }
 
+    /// <summary>
+    /// Converts a Request to object
+    /// </summary>
+    /// <param name="req"></param>
+    /// <returns>Request</returns>
     private Request Parse(IEnumerable<string> req)
     {
         var list = req.ToList();
         var r = parseFirstField(list.First());
-        list.RemoveAt(0);
 
         var headers = new Dictionary<string, string>();
 
-        foreach (var item in list)
+        foreach (var item in list.Skip(1))
         {
             if (item.Length != 0)
             {
@@ -96,7 +126,9 @@ class Worker
             }
         }
 
-        var postData = list.Last();
+        /*if (r.method == Method.POST) {
+            var postData = list.Last();
+        }*/
 
         return new Request(r, headers);
 
@@ -111,9 +143,16 @@ class Worker
         Method method;
         Enum.TryParse(fields[0], out method);
 
-        m.method = method;
-        m.path = fields[1];
-        m.version = fields[2];
+        try
+        {
+            m.method = method;
+            m.path = fields[1];
+            m.version = fields[2];
+        }
+        catch (IndexOutOfRangeException e)
+        {
+            Logger.Error(e.ToString());
+        }
 
         return m;
     }
@@ -121,11 +160,10 @@ class Worker
 
 struct WorkerMessage
 {
-    public WorkerMessage(string _data, Socket _socket)
+    public WorkerMessage(Socket _socket)
     {
-        data = _data;
         socket = _socket;
     }
-    public string data;
+    //public string data;
     public Socket socket;
 }

@@ -8,7 +8,7 @@
             "name": "C#: multithreading Debug",
             "type": "dotnet",
             "request": "launch",
-            "projectPath": "${workspaceFolder}/multithreading.csproj"
+            "projectPath": "${workspaceFolder}/sharp-httpserver.csproj"
         }
 
     ]
