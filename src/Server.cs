@@ -113,3 +113,16 @@ class Server
                select worker;
     }
 }
+
+class ConsoleServer : Server
+{
+    public ConsoleServer(IPEndPoint iep) : base(iep)
+    {
+        Console.CancelKeyPress += new ConsoleCancelEventHandler((sender, args) =>
+        {
+            args.Cancel = true;
+            Console.WriteLine($"{sender} Bye");
+            Stop();
+        });
+    }
+}
