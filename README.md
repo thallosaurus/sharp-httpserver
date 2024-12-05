@@ -1,5 +1,5 @@
 # sharp-httpserver
-A toy HTTP Server intended for learning C#. It exposes a Routing API and a Request Interface similar to ExpressJS.
+A toy HTTP 1.1 Server intended for learning C#. It exposes a Routing API and a Request Interface similar to ExpressJS.
 
 ## Usage
 ### Even though you shouldn't
@@ -7,12 +7,6 @@ A toy HTTP Server intended for learning C#. It exposes a Routing API and a Reque
 ```cs
 using System.Net;
 using HttpServer;
-
-// Supports Middlewares
-Router.AddMiddleware((req, res) => {
-    Console.WriteLine($"{req.meta.method} {req.meta.path}");
-    return res;
-});
 
 // Supports Simple routing
 Router.AddRoute("/", Method.GET, (req, res) => {
@@ -31,4 +25,19 @@ Router.AddRoute("/sleep", Method.GET, (req, res) => {
 
 var server = new Server(IPEndPoint.Parse("127.0.0.1:8080"));
 await server.Start();
+
+// ... after some time, somewhere else
+server.Stop();
+```
+
+## How to define and use Middleware
+You can use middleware to transform the request and response before the router gets called.
+
+### Basic Middleware
+```cs
+// Simple Logger
+Router.AddMiddleware((req, res) => {
+    Console.WriteLine($"{req.Method} {req.Path}");
+    return (req, res);
+});
 ```

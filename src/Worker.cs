@@ -24,10 +24,10 @@ class Worker
     /// </summary>
     /// <param name="id"></param>
     /// <param name="cancellationTokenSource"></param>
-    public Worker(int id)
+    public Worker(int id, CancellationToken token)
     {
         ThreadId = id;
-        tokenSource = new CancellationTokenSource();
+        tokenSource = CancellationTokenSource.CreateLinkedTokenSource(token);
 
         requestChannel = Channel.CreateUnbounded<WorkerMessage>();
 
@@ -45,6 +45,20 @@ class Worker
         available = true;
     }
 
+    public Task WaitUntilWorkerExit()
+    {
+        return Task.Run(async () =>
+        {
+            var alive = workerThread.IsAlive;
+
+            while (alive)
+            {
+                await Task.Delay(100);
+                alive = workerThread.IsAlive;
+            }
+        });
+    }
+
     /// <summary>
     /// Workers Main Function
     /// </summary>
@@ -52,58 +66,62 @@ class Worker
     {
         Console.WriteLine($"Spawned Worker Thread {ThreadId}");
         UnlockWorker();
-        while (!tokenSource.IsCancellationRequested)
+        try
         {
-            // wait until the request channel gets a new request
-            await requestChannel.Reader.WaitToReadAsync(tokenSource.Token);
-            LockWorker();
-
-            WorkerMessage msg;
-            var buffer = new byte[1024];
-            msg = await requestChannel.Reader.ReadAsync(tokenSource.Token);
-            _ = await msg.socket.ReceiveAsync(buffer, SocketFlags.None);
-
-            HttpRequestResponse req;
-            using (var handler = new HttpParserDelegate())
-            using (var parser = new HttpCombinedParser(handler))
+            while (!tokenSource.IsCancellationRequested)
             {
-                var length = parser.Execute(buffer);
-                //Console.WriteLine($"Parsed Request Length: {l}");
-                req = handler.HttpRequestResponse;
-            }            
 
-            try
-            {
+                // wait until the request channel gets a new request
+                await requestChannel.Reader.WaitToReadAsync(tokenSource.Token);
+                LockWorker();
+
+                // parse request
+                var buffer = new byte[1024];
+                WorkerMessage msg = await requestChannel.Reader.ReadAsync(tokenSource.Token);
+                _ = await msg.socket.ReceiveAsync(buffer, SocketFlags.None);
+
                 Response resp;
-                if (req == null)
+                try
                 {
+                    var req = Request.ParseRequest(buffer);
+                    resp = Router.Exec(req);
+                    _ = await msg.socket.SendAsync(resp.GetBytes(), 0, tokenSource.Token);
+
+                    // Close the socket
+                    msg.socket.Close();
+                }
+                catch (InvalidRequest)
+                {
+                    // Request was invalid, send a 400 back
                     resp = Response.CreateBadRequest();
                 }
-                else
-                {
-
-                    resp = Router.Exec(req);
+                catch (SocketException se) {
+                    Console.WriteLine(se);
                 }
-                _ = await msg.socket.SendAsync(resp.GetBytes(), 0, tokenSource.Token);
-            }
-            catch (Exception e) {
-                Console.WriteLine(e);
-            }
-            finally
-            {
-                msg.socket.Close();
-                UnlockWorker();
+                catch (Exception e)
+                {
+                    Console.WriteLine(e);
+                }
+                finally
+                {
+                    UnlockWorker();
+                }
+
             }
 
         }
-        Console.WriteLine($"Closing Worker {ThreadId}");
+        catch (OperationCanceledException)
+        {
+            // cleanup anything here
+            Stop();
+        }
     }
 
     /// <summary>
     /// Sends the handler to the worker
     /// </summary>
     /// <param name="handler"></param>
-    public async void SendRequest(Socket handler)
+    public async void Handle(Socket handler)
     {
         // send request to worker
         try
@@ -117,6 +135,17 @@ class Worker
         {
             return;
         }
+    }
+
+    private void Stop()
+    {
+        if (!tokenSource.IsCancellationRequested)
+        {
+            tokenSource.Cancel();
+        }
+        Console.WriteLine($"Closing Worker {ThreadId}");
+
+        LockWorker();
     }
 }
 
